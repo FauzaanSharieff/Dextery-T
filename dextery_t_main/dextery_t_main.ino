@@ -4,6 +4,7 @@
 const int switchPin = 12;
 const int NUM_JOINTS = 5;
 unsigned long durationMs = 1500;
+String command = "idle";
 
 PCA9685 pwmController(Wire);  
 PCA9685_ServoEval helperServo;
@@ -38,7 +39,8 @@ class Position{
     float current_x;
     float current_y;
     float current_z;
-    Position() : x(0), y(0), z(0), target_x(14.5), target_y(0), target_z(0), current_x(14.5), current_y(0), current_z(0) {}
+    bool gripperOpen;
+    Position() : x(0), y(0), z(0), target_x(14.5), target_y(0), target_z(0), current_x(14.5), current_y(0), current_z(0), gripperOpen(true) {}
 };
 
 ServoMotor servoArray[NUM_JOINTS];
@@ -74,13 +76,9 @@ void setup() {
 
 }
 
-
 void loop() {
 
-  long waitDur = 1500;
-  int switchState = digitalRead(switchPin);
-  if (switchState == HIGH) {
-    // Switch off
+  if (digitalRead(switchPin) == HIGH) {
     Serial.println("Switch is off.");
     delay(1000);
     return;
@@ -88,50 +86,29 @@ void loop() {
 
   Serial.println("Loop started.");
 
-  float default_x = 14.5;
-  float default_y = 0;
-  float default_z = 0;
+  updateCommand();
+  
+  Serial.println(command.c_str());
 
-  move("+x");
-  delay(waitDur);
-  moveCartesian(default_x, default_y, default_z);
-  moveJoint(durationMs);
-  delay(waitDur);
-
-  move("-x");
-  delay(waitDur);
-  moveCartesian(default_x, default_y, default_z);
-  moveJoint(durationMs);
-  delay(waitDur);
-
-  move("+y");
-  delay(waitDur);
-  moveCartesian(default_x, default_y, default_z);
-  moveJoint(durationMs);
-  delay(waitDur);
-
-  move("-y");
-  delay(waitDur);
-  moveCartesian(default_x, default_y, default_z);
-  moveJoint(durationMs);
- delay(waitDur);
-
-  move("+z");
-  delay(waitDur);
-  moveCartesian(default_x, default_y, default_z);
-  moveJoint(durationMs);
-  delay(waitDur);
-
-  move("-z");
-  delay(waitDur);
-  moveCartesian(default_x, default_y, default_z);
-  moveJoint(durationMs);
-  delay(waitDur);
+  if (command != "idle,o" && command != "idle,c") {
+    String moveCommand = command;   // copy current command
+    move(moveCommand.c_str());
+  }
 
   
+   if(command == "idle,o"){
+    if(!pos.gripperOpen)
+      openGripper();
+   }
 
-  Serial.println("Loop ended");
+  if(command == "idle,c"){
+    if(pos.gripperOpen)
+      closeGripper();
   
+  }
+    
+  delay(100);
+  Serial.println("Loop ended");  
   
 }
 
@@ -140,7 +117,7 @@ void move(const char* dir)
 {
   calculateCartesianTarget(dir);
 
-  const int steps = 10;
+  const int cartesianSteps = 10;
 
   float start_x = pos.current_x;
   float start_y = pos.current_y;
@@ -150,15 +127,45 @@ void move(const char* dir)
   float target_y = pos.target_y;
   float target_z = pos.target_z;
 
-  for(int step = 1; step <= steps; step++) {
-    float fraction = (float)step / steps;
+  float prev_x = start_x;
+  float prev_y = start_y;
+  float prev_z = start_z;
+
+  float stepSpeed = 12;   // cm/s
+  float stepDistance = 0; // distance moved along the one axis
+  unsigned long stepTime = 0; // time it should take to complete this one stepDistance
+
+
+  for(int cartesianStep = 1; cartesianStep <= cartesianSteps; cartesianStep++) {
+    float fraction = (float)cartesianStep / cartesianSteps;
 
     float x = start_x + fraction * (target_x - start_x);
     float y = start_y + fraction * (target_y - start_y);
     float z = start_z + fraction * (target_z - start_z);
+
+    float dx = x - prev_x;
+    float dy = y - prev_y;
+    float dz = z - prev_z;
+
+    stepDistance = sqrt(dx * dx + dy * dy + dz * dz);
+    stepTime = (stepDistance / stepSpeed) * 1000;
+    if(stepTime < 20){ 
+      stepTime = 20;
+    }
+
     moveCartesian(x, y, z);    
-    moveJoint(200);
+    moveJoint(stepTime, cartesianStep);
+
+    prev_x = x;
+    prev_y = y;
+    prev_z = z;
+
+    if(haltOperation())
+      return;
+    
+
   }
+
 
 }
  
@@ -195,6 +202,7 @@ void calculateCartesianTarget(const char* dir)
     }
   }
 
+
   else if(axis == 'y') {
     getYLimits(pos.current_x, pos.current_y, pos.current_z, R, r, minLimit, maxLimit);
 
@@ -220,6 +228,7 @@ void calculateCartesianTarget(const char* dir)
 
 void moveCartesian(float x, float y, float z)
 {
+
   // Link lengths in cm
   const float l[NUM_JOINTS] = {10.0, 10.0, 12.5, 0.0, 17.5};
 
@@ -292,8 +301,9 @@ void moveCartesian(float x, float y, float z)
   }
 
 
-/* 
+
   // Optional debugging
+  /* 
   Serial.println("Cartesian target converted to joint angles:");
   for (int i = 0; i < NUM_JOINTS; i++) {
     Serial.print("q");
@@ -304,31 +314,7 @@ void moveCartesian(float x, float y, float z)
   */
 }
 
-
-void openGripper()
-{
-  unsigned long gripperDurationMs = 500;
-  // Angle for closed gripper = 0 deg
-  // Angle for open gripper = -45 deg
-  cubicInterpolateServo(0, -45, gripperDurationMs, 5); 
-  delay(300);
-  
-}
-
-
-void closeGripper()
-{
-  unsigned long gripperDurationMs = 500;
-  // Angle for closed gripper = 0 deg
-  // Angle for open gripper = -45 deg
-  cubicInterpolateServo(-45, 0, gripperDurationMs, 5);  
-  delay(300);
-
-}
-
-
-void moveJoint(unsigned long duration){
-  
+void moveJoint(unsigned long duration, int cartesianStep){
   // servoArray[i].endAngle already updated in previous call
   float finalInterpolatedAngle;
 
@@ -336,39 +322,56 @@ void moveJoint(unsigned long duration){
   const int steps = duration / stepDelay;
 
   for (int i = 0; i <= steps; i++) {
-    float t = (float)i / steps; // Normalize time [0,1]
-        
-      // Cubic interpolation (Hermite basis: smooth start and stop)
-      float h00 = 2 * t * t * t - 3 * t * t + 1;
-      float h01 = -2 * t * t * t + 3 * t * t;
-    for(int j = 0; j < NUM_JOINTS; j++)
-    { 
-      // Interpolated angle based on the cubic interpolation formula
-      float interpolatedAngle = h00 * servoArray[j].startAngle + h01 * servoArray[j].endAngle;
+  float t = (float)i / steps; // Normalize time [0,1]
 
-       finalInterpolatedAngle = interpolatedAngle;
-       if(j == 1){
-        finalInterpolatedAngle -= 20;
-       }
+  // Choose interpolation profile based on cartesianStep
+  float progress;
 
-    
-      // Convert the interpolated angle to PWM and move the servo
-      int pwmVal = helperServo.pwmForAngle(finalInterpolatedAngle);
-      pwmController.setChannelPWM(servoArray[j].channel, pwmVal);
+  if (cartesianStep > 1) {
+    // Constant velocity profile
+    progress = t;
+  }
+  else {
+    // Accelerating profile:
+    // velocity starts at 0 and reaches max at the end
+    progress = t;
+  }
 
-     
-      servoArray[j].currentAngle = interpolatedAngle;
+  for (int j = 0; j < NUM_JOINTS; j++)
+  { 
+    float interpolatedAngle =
+        servoArray[j].startAngle +
+        progress * (servoArray[j].endAngle - servoArray[j].startAngle);
+
+    finalInterpolatedAngle = interpolatedAngle;
+
+    if (j == 1) {
+      finalInterpolatedAngle -= 20;
     }
-      delay(stepDelay);
 
-    }
+    if(finalInterpolatedAngle > 90)
+      finalInterpolatedAngle = 90;
+    else if(finalInterpolatedAngle < -90)
+      finalInterpolatedAngle = -90;
 
+    int pwmVal = helperServo.pwmForAngle(finalInterpolatedAngle);
+    pwmController.setChannelPWM(servoArray[j].channel, pwmVal);
 
-    for(int i = 0; i < NUM_JOINTS; i++)
-  {
-    servoArray[i].startAngle = servoArray[i].currentAngle;
+    servoArray[j].currentAngle = interpolatedAngle;
   }
   forwardKinematics();
+  delay(stepDelay);
+
+  if(haltOperation())
+  {
+    for(int i = 0; i < NUM_JOINTS; i++)
+      servoArray[i].startAngle = servoArray[i].currentAngle;
+    return;
+  }
+}
+
+  for(int i = 0; i < NUM_JOINTS; i++)
+    servoArray[i].startAngle = servoArray[i].currentAngle;
 
 }
 
@@ -445,13 +448,15 @@ void forwardKinematics()
   pos.current_x = T05[0][3];
   pos.current_y = T05[1][3];
   pos.current_z = T05[2][3];
-
-    Serial.print("Moving to the target: ");
+/* 
+    Serial.print("Current position: ");
     Serial.print(pos.current_x);
     Serial.print(", ");
     Serial.print(pos.current_y);
     Serial.print(", ");
     Serial.println(pos.current_z);
+    */
+    
 }
 
 void cubicInterpolateServo(float startAngle, float endAngle, unsigned long durationMs, uint8_t channel) {
@@ -478,7 +483,50 @@ void cubicInterpolateServo(float startAngle, float endAngle, unsigned long durat
     }
 }
 
+void openGripper()
+{
+  unsigned long gripperDurationMs = 300;
+  // Angle for closed gripper = 0 deg
+  // Angle for open gripper = -45 deg
+  cubicInterpolateServo(0, -45, gripperDurationMs, 5); 
+  pos.gripperOpen = true;
+  delay(300);
+  
+}
 
+void closeGripper()
+{
+  unsigned long gripperDurationMs = 300;
+  // Angle for closed gripper = 0 deg
+  // Angle for open gripper = -45 deg
+  cubicInterpolateServo(-45, 0, gripperDurationMs, 5);  
+  pos.gripperOpen = false;
+  delay(300);
+
+}
+
+void updateCommand()
+{
+  while (Serial.available() > 0) {
+    String newCommand = Serial.readStringUntil('\n');
+    newCommand.trim();
+
+    if (newCommand.length() > 0) {
+      command = newCommand;
+    }
+  }
+}
+
+bool haltOperation()
+{
+  updateCommand();
+
+  if (command == "idle,o" || command == "idle,c" || digitalRead(switchPin) == HIGH) {
+    return true;
+  }
+
+  return false;
+}
 
 void getXLimits(float y, float z, float R, float r, float &xMin, float &xMax)
 {
@@ -502,6 +550,7 @@ void getXLimits(float y, float z, float R, float r, float &xMin, float &xMax)
   else {
     xMin = 0;
   }
+
 }
 
 void getZLimits(float x, float y, float R, float r, float &zMin, float &zMax)
@@ -617,210 +666,6 @@ void createDHMatrix(float phi, float d, float a, float alpha, float T[4][4])
   T[3][3] = 1.0;
 }
 
-
-
-
-void moveset2()
-{
-  float x;
-  float y;
-  float z;
-  
- // forwardKinematics();    // Current position is calculated (pos object)
-  // calculateLimits();
-
-  float default_x = 14.5;
-  float default_y = 0;
-  float default_z = 1;
-
-  // TARGET 1 - DEFAULT
-  moveCartesian(default_x, default_y, default_z); // Inverse Kinematics, updates motor target angle data member
-  moveJoint(durationMs);                          // Joint angle movement, uses motor target angle data member
-  
-  if (digitalRead(switchPin) == HIGH){
-    return;
-  } 
-
-  // TARGET 2 - MAX X
-  x = 20;
-  moveCartesian(x, default_y, default_z); 
-  moveJoint(durationMs);
-  
-  if (digitalRead(switchPin) == HIGH){
-    return;
-  }
-
-  // TARGET 3 - DEFAULT
-  moveCartesian(default_x, default_y, default_z);
-  moveJoint(durationMs);
-  
-  if (digitalRead(switchPin) == HIGH){
-    return;
-  }
-  
-  // TARGET 4 - MIN X
-  x = 8;
-  moveCartesian(x, default_y, default_z); 
-  moveJoint(durationMs);
-  
-  if (digitalRead(switchPin) == HIGH){
-    return;
-  }
-  
-  // TARGET 5 - DEFAULT
-  moveCartesian(default_x, default_y, default_z);
-  moveJoint(durationMs);
-  
-  if (digitalRead(switchPin) == HIGH){
-    return;
-  }
-  
-  // TARGET 6 - MAX Y
-  y = 15;
-  moveCartesian(default_x, y, default_z); 
-  moveJoint(durationMs);
-  
-  if (digitalRead(switchPin) == HIGH){
-    return;
-  }
-  
-  // TARGET 7 - DEFAULT
-  moveCartesian(default_x, default_y, default_z); 
-  moveJoint(durationMs);
-  
-  if (digitalRead(switchPin) == HIGH){
-    return;
-  }
-  
-  // TARGET 8 - MIN Y
-  y = -15;
-  moveCartesian(default_x, y, default_z); 
-  moveJoint(durationMs);
-  
-  if (digitalRead(switchPin) == HIGH){
-    return;
-  }
-  
-  // TARGET 9 - DEFAULT
-  moveCartesian(default_x, default_y, default_z); 
-  moveJoint(durationMs);
-  
-  if (digitalRead(switchPin) == HIGH){
-    return;
-  }
-  
-  // TARGET 10 - MAX Z
-  z = 7;
-  moveCartesian(default_x, default_y, z); 
-  moveJoint(durationMs);
-  
-  if (digitalRead(switchPin) == HIGH){
-    return;
-  }
-  
-  // FINAL TARGET - DEFAULT
-  moveCartesian(default_x, default_y, default_z); 
-  moveJoint(durationMs);
-  
-  if (digitalRead(switchPin) == HIGH){
-    return;
-  }
-}
-
-void moveset1()
-{
-
-
-  unsigned long moveset1Delay = 700;
-  unsigned long prepDelay = 5000;
-
-
-  // POSE 1 - Home position
-  openGripper();
-  servoArray[0].endAngle = 0;
-  servoArray[1].endAngle = -45;
-  servoArray[2].endAngle = -90;
-  servoArray[3].endAngle = 45;
-  servoArray[4].endAngle = 0;
-  moveJoint(durationMs);
-  delay(moveset1Delay);
-  delay(prepDelay);
-
-  // POSE 2 - Pick target pre-approach
-  servoArray[0].endAngle = 45;
-  servoArray[1].endAngle = 5;
-  servoArray[2].endAngle = -45;
-  servoArray[3].endAngle = 90;
-  servoArray[4].endAngle = 0;
-  moveJoint(durationMs);
-  delay(moveset1Delay);
-
-
-  // POSE 3 - Pick target approach and grip
-  servoArray[0].endAngle = 45;
-  servoArray[1].endAngle = 13;
-  servoArray[2].endAngle = -45;
-  servoArray[3].endAngle = 80;
-  servoArray[4].endAngle = 0;
-  moveJoint(500);
-  delay(moveset1Delay);
-  closeGripper();
-
-
-  // POSE 4 - Pick target pre-approach
-  servoArray[0].endAngle = 45;
-  servoArray[1].endAngle = 5;
-  servoArray[2].endAngle = -45;
-  servoArray[3].endAngle = 90;
-  servoArray[4].endAngle = 0;
-  moveJoint(500);
-  delay(moveset1Delay);
-
-
-  // POSE 5 - Drop target pre-approach
-  servoArray[0].endAngle = -45;
-  servoArray[1].endAngle = 5;
-  servoArray[2].endAngle = -45;
-  servoArray[3].endAngle = 90;
-  servoArray[4].endAngle = -60;
-  moveJoint(2500);
-  delay(moveset1Delay);
-
-
-  // POSE 6 - Drop target approach and release
- servoArray[0].endAngle = -45;
-  servoArray[1].endAngle = 13;
-  servoArray[2].endAngle = -45;
-  servoArray[3].endAngle = 80;
-  servoArray[4].endAngle = -60;
-  moveJoint(500);
-  delay(moveset1Delay);
-  openGripper();
-
-
-  // POSE 7 - Drop target pre-approach
-  servoArray[0].endAngle = -45;
-  servoArray[1].endAngle = 5;
-  servoArray[2].endAngle = -45;
-  servoArray[3].endAngle = 90;
-  servoArray[4].endAngle = -60;
-  moveJoint(500);
-  delay(moveset1Delay);
-
-
-  // POSE 8 - Home position
-  servoArray[0].endAngle = 0;
-  servoArray[1].endAngle = -45;
-  servoArray[2].endAngle = -90;
-  servoArray[3].endAngle = 45;
-  servoArray[4].endAngle = 0;
-  moveJoint(durationMs);
-  delay(moveset1Delay);
-  delay(prepDelay);
-  
-
-
-}
 
 
 /*
