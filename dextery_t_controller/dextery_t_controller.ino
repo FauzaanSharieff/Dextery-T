@@ -1,6 +1,5 @@
-#include "Wire.h"
-
 // Variables for analog input readings and communication
+
 int x;           
 int y;           
 int z;          

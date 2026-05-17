@@ -1,178 +1,175 @@
 # Dextery-T
 
-Dextery-T is a 6-DOF articulated robotic arm project built using MG996R servo motors, an Arduino Uno, and a PCA9685 PWM servo driver. The goal of the project is to control the robot’s TCP/tool center point in Cartesian coordinates, allowing the arm to move to desired `(x, y, z)` positions using inverse kinematics.
+Dextery-T is a 5-DOF articulated robotic arm project built using MG996R servo motors, an Arduino Uno, and a PCA9685 PWM servo driver.
 
-The project is currently in the development and testing phase, with the main focus on validating the kinematic model, inverse kinematics, workspace limits, and Arduino-based servo control.
+The goal of the project is to control the robot's TCP/tool center point in Cartesian coordinates, allowing the arm to move along the x, y, and z axes while maintaining a fixed end-effector orientation.
 
----
+## Project Status
+
+Dextery-T has been successfully completed.
+
+The main goal of the project has been achieved: the robot can move its TCP in Cartesian space using inverse kinematics while keeping the end-effector orientation fixed. The project also includes a controller interface and a Python serial bridge for sending movement commands to the robot.
 
 ## Project Goal
 
-The final goal of Dextery-T is to create a small robotic arm capable of receiving Cartesian position commands and converting them into synchronized joint movements.
+The goal of Dextery-T is to create a small robotic arm capable of receiving Cartesian movement commands and converting them into synchronized servo motion.
 
-The intended control flow is:
+The general control flow is:
 
-Target Cartesian Position
-        ↓
-Inverse Kinematics
-        ↓
-Joint Angle Calculation
-        ↓
-Synchronized Servo Motion
-        ↓
-Robot Reaches Desired TCP Position
+1. Receive Cartesian movement command
+2. Calculate a reachable Cartesian target
+3. Use inverse kinematics to calculate the required joint angles
+4. Move all joints synchronously
+5. Update the TCP position using forward kinematics
 
-At the current stage, the project focuses on testing the mathematical model and validating movement behavior before moving toward more advanced control interfaces.
+## Features
 
----
-
-## Current Development Status
-
-Dextery-T has already passed the basic joint-space movement stage. The robot can move its servos synchronously to specified joint angle targets.
-
-Cartesian control has also been implemented and tested successfully. The robot can now receive a target Cartesian position, calculate the required joint angles through inverse kinematics, and move the TCP/tool center point to the desired position. The current implementation assumes a fixed TCP orientation, where the tool/end-effector faces downward. Because of this, only the desired Cartesian position needs to be provided, while the orientation is handled internally by the kinematic model.
-
-The current development stage focuses on improving the quality, safety, and flexibility of the movement. This includes:
-
-- Adding a proper controller/input system for commanding Cartesian motion
-- Implementing movement interruption or safer stopping behavior
-- Improving the trajectory generation method
-- Fixing the current cubic interpolation issue, where every small interpolated Cartesian path segment starts and ends with zero velocity
-- Reducing uneven stop-start motion between interpolated Cartesian points
-- Adding dynamic speed control instead of relying on fixed movement durations
-- Further testing Cartesian paths on the physical robot
-
-At this stage, the main kinematic functionality is working. The focus is now shifting from “can the robot reach the Cartesian target?” to “can the robot move there smoothly, safely, and controllably?”
-
----
-
-## Repository Contents
-
-### `dextery_t_main.ino`
-
-This is the main Arduino file for controlling the robot arm.
-
-It contains the embedded implementation used to drive the servo motors through the PCA9685 PWM driver. The code is responsible for:
-
-- Communicating with the PCA9685 servo driver
-- Sending angle commands to the motors
-- Executing synchronized joint movement
-- Converting inverse kinematics results into servo target angles
-- Testing Cartesian movement on the physical robot
-
-The Arduino code is the main bridge between the mathematical model and the real hardware.
-
----
-
-### `kinematicsSetup.m`
-
-This MATLAB script sets up the kinematic model of the robot.
-
-It defines the robot’s geometry, joint variables, transformation matrices, and the relationships between the different coordinate frames of the arm.
-
-This file is mainly used to derive and verify the forward kinematics of the system. It forms the mathematical foundation for the rest of the project.
-
----
-
-### `inverseKinematics.m`
-
-This MATLAB script implements the inverse kinematics of the robotic arm.
-
-Using the already-defined transformation model, it calculates the joint angles required for the TCP to reach a given Cartesian position.
-
-The script is used to test and validate the IK equations before transferring the logic into the Arduino `.ino` file.
-
----
-
-### `cartesianLimits.m`
-
-This MATLAB script is used to explore the reachable Cartesian workspace of the robot.
-
-It calculates and visualizes the position limits of the TCP based on the robot’s link lengths, joint limits, and kinematic structure.
-
-The resulting workspace resembles a torus-like reachable region, helping identify which Cartesian points are physically reachable by the arm.
-
-This is important because the inverse kinematics should only be tested with positions that the robot can actually reach.
-
----
-
-### `DH New.jpeg`
-
-This image shows the robot configuration with the coordinate origins, frame transformations, and kinematic structure visualized.
-
-It is used as a reference for understanding how the coordinate frames are assigned and how the robot’s transformations are built.
-
----
+- 5-DOF robotic arm architecture
+- Cartesian TCP control along translational axes
+- Fixed downward-facing end-effector orientation
+- Inverse kinematics implemented
+- Forward kinematics for position tracking
+- Synchronous multi-servo motion
+- Continuous Path cartesian interpolation for straight trajectory
+- Linear joint interpolation for smoother movement
+- Workspace boundary calculation using a torus-like reachable region
+- Controller-based movement commands
+- PySerial communication bridge between controller and robot Arduino
+- Gripper open/close control during idle state
+- Movement interruption through idle command handling
 
 ## Hardware Used
-
-The current hardware setup includes:
 
 - Arduino Uno
 - PCA9685 PWM servo driver
 - MG996R servo motors
-- External battery supply
+- External battery supply (2S LiPo)
 - Voltage regulator for servo power
-- Serial/USB connection for programming and debugging
+- Controller Arduino
+- Joystick/controller input system
+- USB serial connection for communication and debugging
 
-
----
-
-## Software Used
-
-The project currently uses:
+## Software and Tools
 
 - Arduino IDE
 - MATLAB
+- Python
+- PySerial
+- Git/GitHub
 - PCA9685 servo driver library
-- Serial monitor for debugging
-- Git/GitHub for version control
 
-MATLAB is used for mathematical development, simulation, and validation, while Arduino is used for real-time control of the physical robot.
+## Concepts Involved
 
----
+### Forward Kinematics
+
+Forward kinematics is used to calculate the current TCP position based on the robot's joint angles. This allows the software to track where the end-effector is after each movement.
+
+### Inverse Kinematics
+
+Inverse kinematics is used to calculate the joint angles required to move the TCP to a desired Cartesian position. The implementation assumes a fixed end-effector orientation, so only the Cartesian position needs to be commanded.
+
+### Cartesian Control
+
+Instead of directly commanding individual joint angles, Dextery-T allows the TCP to be moved along Cartesian directions such as `+x`, `-x`, `+y`, `-y`, `+z`, and `-z`.
+
+### Synchronous Joint Motion
+
+All servo motors are moved together over the same movement duration. This allows different joints to travel different angle distances while still starting and ending their motion at the same time.
+
+### Linear Interpolation
+
+Linear interpolation is used to gradually move each servo from its current joint angle to its target joint angle. This avoids sudden jumps in servo commands while keeping the movement logic simple and predictable.
+
+### Workspace Limiting
+
+The reachable Cartesian workspace is modeled as a torus-like region. This helps determine valid target positions and prevents the robot from attempting to move outside its physical reach.
+
+### Serial Communication
+
+A Python PySerial bridge is used to relay commands from a controller Arduino to the robot Arduino. The bridge validates movement commands and forwards them to the main robot controller over USB serial.
+
+### Embedded Servo Control
+
+The Arduino Uno communicates with the PCA9685 PWM driver to generate servo PWM signals. Joint angles are converted into PWM values before being sent to the corresponding servo channels.
+
+## Repository Structure
+
+### `dextery_t_main.ino`
+
+Main Arduino program for the robotic arm. It contains the embedded implementation of servo control, inverse kinematics, forward kinematics, Cartesian movement, workspace limits, gripper control, and command handling.
+
+### `dextery_t_controller.ino`
+
+Arduino controller program used to read joystick and switch inputs. It converts user input into high-level movement commands such as `+x`, `-z`, `idle,o`, and `idle,c`.
+
+### `serial_bridge.py`
+
+Python script that acts as a serial communication bridge between the controller Arduino and the robot Arduino. It reads commands from the controller, validates them, and forwards them to the main robot.
+
+### `kinematicsSetup.m`
+
+MATLAB script used to define and test the robot's kinematic chain, transformation matrices, and coordinate frame relationships.
+
+### `inverseKinematics.m`
+
+MATLAB script used to develop and validate the inverse kinematics equations before transferring the logic to the Arduino implementation.
+
+### `cartesianLimits.m`
+
+MATLAB script used to analyze and visualize the reachable Cartesian workspace of the robot arm.
+
+### `Origin Transformations.jpeg`
+
+Reference image showing the robot's coordinate frames along each joint.
+
+## Command Interface
+
+Dextery-T receives simple text-based movement commands. These commands are generated by the controller Arduino and passed to the robot Arduino through the Python serial bridge.
+
+| Command | Description |
+|---|---|
+| `+x` | Move TCP in the positive x direction |
+| `-x` | Move TCP in the negative x direction |
+| `+y` | Move TCP in the positive y direction |
+| `-y` | Move TCP in the negative y direction |
+| `+z` | Move TCP in the positive z direction |
+| `-z` | Move TCP in the negative z direction |
+| `idle,o` | Idle state with gripper open |
+| `idle,c` | Idle state with gripper closed |
 
 ## Development Phases
 
 ### Phase 1: Joint-Space Control
 
-Status: Mostly complete.
-
-In this phase, the robot is controlled by directly providing target joint angles. The servos move synchronously from their current positions to the desired joint configuration.
-
-This phase confirms that the motors, servo driver, power system, and basic movement functions work correctly.
-
----
+The first phase focused on controlling the servo motors directly using target joint angles. This confirmed that the motors, PWM driver, power system, and basic movement logic worked correctly.
 
 ### Phase 2: Cartesian Control
 
-Status: In progress.
+The second phase implemented Cartesian control of the TCP. Desired Cartesian positions are converted into joint angles using inverse kinematics and then sent to the motors through synchronized servo movement.
 
-In this phase, the robot receives Cartesian position targets instead of direct joint angles.
+### Phase 3: Controller Integration
 
-The inverse kinematics calculates the required joint angles, and the Arduino code commands the servos accordingly.
+The robot can be commanded using a separate controller Arduino. A Python PySerial bridge forwards the controller commands to the main robot Arduino.
 
-Although the robot is now capable of reaching specific targets in cartesian coordinates, this feature is yet to be implemented using a controller (with joysticks probably).
+## Limitations
 
-This is the current main development phase of Dextery-T.
+- The current inverse kinematics implementation assumes a fixed end-effector orientation. This is suitable for the current goal of Cartesian translation and PnP, but full orientation control is not implemented. Due to the robot having 5 degrees of freedom in joint space, it is only possible to control orientation along 2 axes.
+- The robot uses hobby servo motors. So precision, torque, and repeatability are limited compared to industrial robotic arms.
+- The workspace is limited by the physical geometry and servo range of the arm.
 
+## Future Work (maybe)
 
----
-
-## Notes and Current Limitations
-
-The current trajectory interpolation uses cubic motion profiles where velocity starts and ends at zero. This works well for single complete movements, but when a path is split into many small Cartesian steps, each step starts and ends with zero velocity. This can lead to unnecessarily stop-start motion.
-
-A future improvement will be to replace this with a smoother velocity profile that allows continuous motion across path segments.
-
-Additionally, the current implementation assumes a fixed TCP orientation. This simplifies the inverse kinematics and is suitable for tasks such as basic pick-and-place movement, but full orientation control may be added later.
-
----
+- Improve mechanical rigidity and repeatability
+- Add more advanced trajectory planning
+- Improve gripper mechanics and object handling using tactile sensing
+- Integrate Dextery-T with external control systems
+- Implement autonomous movement based on object detection
+- Use the robot as a modular platform for future projects
 
 ## Project Vision
 
-Dextery-T is intended to be more than just a basic servo arm. The long-term vision is to create a functional robotic platform that can move meaningfully in Cartesian space and eventually be connected to more advanced control systems.
+Dextery-T was built as a practical robotics platform combining mechanical design, embedded programming, kinematics, control logic, MATLAB-based modeling, and serial communication - with the purpose of helping me get deeply familiar with robot kinematics concepts.
 
-The project combines mechanical design, embedded programming, kinematics, control engineering, and simulation into one practical robotics system.
+Its modular software structure allows access to both high-level Cartesian control and low-level servo control, making it suitable for future extensions and integration with other robotics concepts.
 
-As a robotics student, when someone asks me how many robots I have already made, I would like the answer to gain me some aura.
+As a robotics student, when someone asks me how many robots I have made so far, I would like the answer to make me feel a bit better about myself.

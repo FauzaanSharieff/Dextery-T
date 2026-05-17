@@ -38,7 +38,7 @@ class Position{
   float current_y;
   float current_z;
   bool gripperOpen;
-  Position() : x(0), y(0), z(0), target_x(14.5), target_y(0), target_z(0), current_x(14.5), current_y(0), current_z(0), gripperOpen(false) {}
+  Position() : x(0), y(0), z(0), target_x(14.5), target_y(0), target_z(0), current_x(0), current_y(0), current_z(0), gripperOpen(false) {}
 };
 
 ServoMotor servoArray[NUM_JOINTS];
@@ -63,6 +63,7 @@ void setup() {
   for(int i = 0; i < NUM_JOINTS; i++)
     pwmController.setChannelPWM(servoArray[i].channel, pwmVal);
   pwmController.setChannelPWM(5, pwmVal);
+  forwardKinematics();
 
 }
 
@@ -404,7 +405,7 @@ void forwardKinematics()
     
 }
 
-void cubicInterpolateServo(float startAngle, float endAngle, unsigned long durationMs, uint8_t channel) {
+void cubicInterpolateGripper(float startAngle, float endAngle, unsigned long durationMs, uint8_t channel) {
 
   const unsigned long stepDelay = 20; // milliseconds between steps
   const int steps = durationMs / stepDelay;
@@ -433,7 +434,7 @@ void openGripper()
   unsigned long gripperDurationMs = 300;
   // Angle for closed gripper = 0 deg
   // Angle for open gripper = -45 deg
-  cubicInterpolateServo(0, -45, gripperDurationMs, 5); 
+  cubicInterpolateGripper(0, -45, gripperDurationMs, 5); 
   pos.gripperOpen = true;
   delay(300);
 }
@@ -443,7 +444,7 @@ void closeGripper()
   unsigned long gripperDurationMs = 300;
   // Angle for closed gripper = 0 deg
   // Angle for open gripper = -45 deg
-  cubicInterpolateServo(-45, 0, gripperDurationMs, 5);  
+  cubicInterpolateGripper(-45, 0, gripperDurationMs, 5);  
   pos.gripperOpen = false;
   delay(300);
 }
