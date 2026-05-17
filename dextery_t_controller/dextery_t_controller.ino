@@ -6,14 +6,13 @@ int y;
 int z;          
 int upperThreshold = 900;
 int lowerThreshold = 100;
-bool gripperClose = false;
+bool gripperOpen = false;
 int leftButton = 8;
 int rightButton = 7;
 
 void setup() {
   // Initialize serial communication for debugging
   Serial.begin(115200);
-
 
   // Configure input pins for joystick analog readings
   pinMode(A0, INPUT); 
@@ -30,9 +29,9 @@ void loop() {
   y = analogRead(A3);  
 
   if(digitalRead(leftButton) == LOW)
-    gripperClose = false;
+    gripperOpen = true;
   else if(digitalRead(rightButton) == LOW)
-    gripperClose = true;
+    gripperOpen = false;
   
   if(x > upperThreshold)
     Serial.println("-x");
@@ -47,10 +46,10 @@ void loop() {
   else if(z < lowerThreshold)
     Serial.println("+z");
   else { 
-    if(gripperClose)
-      Serial.println("idle,c");
+    if(gripperOpen)
+      Serial.println("idle,o");
     else
-      Serial.println("idle,o"); 
+      Serial.println("idle,c"); 
   }
   
   // Delay for a short period to avoid spamming transmissions

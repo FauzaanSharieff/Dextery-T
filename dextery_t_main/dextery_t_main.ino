@@ -1,31 +1,29 @@
 #include "Wire.h"
 #include "PCA9685.h"
 
-const int switchPin = 12;
+const int switchPin = 12;     
 const int NUM_JOINTS = 5;
-unsigned long durationMs = 1500;
-String command = "idle";
+String command = "idle,c";    // Start with a closed gripper
 
 PCA9685 pwmController(Wire);  
 PCA9685_ServoEval helperServo;
 
 class ServoMotor{
+
 public:
+  uint8_t channel;
+  float startAngle;
+  float endAngle;
+  float currentAngle;
 
-    uint8_t channel;
-    float startAngle;
-    float endAngle;
-    float currentAngle;
-
-    ServoMotor() : channel(0), startAngle(0), endAngle(0), currentAngle(0) {}
-
-    ServoMotor(uint8_t ch) {
+  ServoMotor() : channel(0), startAngle(0), endAngle(0), currentAngle(0) {}
+  
+  ServoMotor(uint8_t ch) {
     channel = ch;
     startAngle = 0;
     currentAngle = startAngle;
     endAngle = startAngle;
-    }
-
+  }
 };
 
 class Position{
@@ -34,13 +32,13 @@ class Position{
   float y;
   float z;
   float target_x;
-    float target_y;
-    float target_z;
-    float current_x;
-    float current_y;
-    float current_z;
-    bool gripperOpen;
-    Position() : x(0), y(0), z(0), target_x(14.5), target_y(0), target_z(0), current_x(14.5), current_y(0), current_z(0), gripperOpen(true) {}
+  float target_y;
+  float target_z;
+  float current_x;
+  float current_y;
+  float current_z;
+  bool gripperOpen;
+  Position() : x(0), y(0), z(0), target_x(14.5), target_y(0), target_z(0), current_x(14.5), current_y(0), current_z(0), gripperOpen(false) {}
 };
 
 ServoMotor servoArray[NUM_JOINTS];
@@ -48,30 +46,22 @@ Position pos;
 
 void setup() {
   
-  pinMode(LED_BUILTIN, OUTPUT);  // Set onboard LED as output
-  pinMode(switchPin, INPUT_PULLUP);  // Enable internal pull-up
+  pinMode(switchPin, INPUT_PULLUP);  
 
-  Serial.begin(115200);  // Begin Serial and Wire interface
-  Serial.println("setup()");
+  Serial.begin(115200);             // Begin Serial and Wire interface
   Wire.begin();
-
-  // pwmController.resetDevices();       // Reset all PCA9685 devices on I2C line
   pwmController.init();             // Initialize module with default settings
   pwmController.setPWMFreqServo();  // Set to standard 50Hz (20ms servo cycle)
 
-
-  // Constructor
+  // Constructor for setting PWM channels to object
   for (int i = 0; i < NUM_JOINTS; i++) {
     servoArray[i] = ServoMotor(i);
   }
 
-  float initGlobalCoordinate = 0;
+  float initGlobalCoordinate = 0;     // Set all motors to 0 position
   int pwmVal = helperServo.pwmForAngle(initGlobalCoordinate);
-
   for(int i = 0; i < NUM_JOINTS; i++)
-  { 
     pwmController.setChannelPWM(servoArray[i].channel, pwmVal);
-  }
   pwmController.setChannelPWM(5, pwmVal);
 
 }
@@ -84,38 +74,31 @@ void loop() {
     return;
   } 
 
-  Serial.println("Loop started.");
-
-  updateCommand();
-  
+  updateCommand(); 
   Serial.println(command.c_str());
 
   if (command != "idle,o" && command != "idle,c") {
     String moveCommand = command;   // copy current command
     move(moveCommand.c_str());
   }
-
-  
-   if(command == "idle,o"){
+ 
+  if(command == "idle,o"){
     if(!pos.gripperOpen)
       openGripper();
-   }
+  }
 
   if(command == "idle,c"){
     if(pos.gripperOpen)
-      closeGripper();
-  
-  }
-    
-  delay(100);
-  Serial.println("Loop ended");  
+      closeGripper(); 
+  }  
+  delay(50); 
   
 }
 
 
 void move(const char* dir)
 {
-  calculateCartesianTarget(dir);
+  calculateCartesianTarget(dir);    // Updates pos.target_x/y/z
 
   const int cartesianSteps = 10;
 
@@ -133,8 +116,7 @@ void move(const char* dir)
 
   float stepSpeed = 12;   // cm/s
   float stepDistance = 0; // distance moved along the one axis
-  unsigned long stepTime = 0; // time it should take to complete this one stepDistance
-
+  unsigned long stepTime = 0; // time it should take to complete one stepDistance
 
   for(int cartesianStep = 1; cartesianStep <= cartesianSteps; cartesianStep++) {
     float fraction = (float)cartesianStep / cartesianSteps;
@@ -153,8 +135,8 @@ void move(const char* dir)
       stepTime = 20;
     }
 
-    moveCartesian(x, y, z);    
-    moveJoint(stepTime, cartesianStep);
+    moveCartesian(x, y, z);    // Updates .endAngle servo data member
+    moveJoint(stepTime);       // Moves to .endAngle
 
     prev_x = x;
     prev_y = y;
@@ -162,20 +144,18 @@ void move(const char* dir)
 
     if(haltOperation())
       return;
-    
 
   }
-
-
 }
  
 void calculateCartesianTarget(const char* dir)
 {
-  // Define x limits here
+  // The robot has a 3D workspace that looks like a front-top half of a torus
+  // X limits for Y = 0 (same for Y when X = 0 except Y has + and - counterparts)
   float xMinLimit = 7.0;
   float xMaxLimit = 22.0;
 
-  // Derive torus parameters
+  // Torus parameters
   float R = (xMaxLimit + xMinLimit) / 2.0;   // centerline radius
   float r = (xMaxLimit - xMinLimit) / 2.0;   // cross-section radius / tube radius
 
@@ -193,7 +173,6 @@ void calculateCartesianTarget(const char* dir)
 
   if(axis == 'x') {
     getXLimits(pos.current_y, pos.current_z, R, r, minLimit, maxLimit);
-
     if(sign == '+') {
       pos.target_x = maxLimit;
     }
@@ -202,10 +181,8 @@ void calculateCartesianTarget(const char* dir)
     }
   }
 
-
   else if(axis == 'y') {
     getYLimits(pos.current_x, pos.current_y, pos.current_z, R, r, minLimit, maxLimit);
-
     if(sign == '+') {
       pos.target_y = maxLimit;
     }
@@ -216,7 +193,6 @@ void calculateCartesianTarget(const char* dir)
 
   else if(axis == 'z') {
     getZLimits(pos.current_x, pos.current_y, R, r, minLimit, maxLimit);
-
     if(sign == '+') {
       pos.target_z = maxLimit;
     }
@@ -228,7 +204,6 @@ void calculateCartesianTarget(const char* dir)
 
 void moveCartesian(float x, float y, float z)
 {
-
   // Link lengths in cm
   const float l[NUM_JOINTS] = {10.0, 10.0, 12.5, 0.0, 17.5};
 
@@ -236,7 +211,6 @@ void moveCartesian(float x, float y, float z)
   float q[NUM_JOINTS];
   // Joint coordinates in degrees
   float qDeg[NUM_JOINTS];
-
 
   float T05[4][4] = {
     {0.0, 0.0, 1.0, x},
@@ -273,8 +247,8 @@ void moveCartesian(float x, float y, float z)
   float li = sqrt(li_xcomp * li_xcomp + li_ycomp * li_ycomp);
   float alphaArg = (li * li + l[2] * l[2] - l[1] * l[1]) / (2.0 * li * l[2]);
   float betaArg  = (li * li + l[1] * l[1] - l[2] * l[2]) / (2.0 * li * l[1]); 
+
   alphaArg = constrain(alphaArg, -1.0, 1.0);
-  
   betaArg  = constrain(betaArg,  -1.0, 1.0);  
 
   float alpha1 = acos(alphaArg);
@@ -295,62 +269,33 @@ void moveCartesian(float x, float y, float z)
       qDeg[i] = q[i] * 180.0 / PI;
   }
 
-  // Write target joint angles into global servoArray
+  // Write target joint angles into global servoArray object
   for (int i = 0; i < NUM_JOINTS; i++) {
     servoArray[i].endAngle = qDeg[i];
   }
 
-
-
-  // Optional debugging
-  /* 
-  Serial.println("Cartesian target converted to joint angles:");
-  for (int i = 0; i < NUM_JOINTS; i++) {
-    Serial.print("q");
-    Serial.print(i + 1);
-    Serial.print(" = ");
-    Serial.println(qDeg[i]);
-  }
-  */
 }
 
-void moveJoint(unsigned long duration, int cartesianStep){
-  // servoArray[i].endAngle already updated in previous call
-  float finalInterpolatedAngle;
+void moveJoint(unsigned long duration){
+  // servoArray[i].endAngle already updated in another previous call
 
   const unsigned long stepDelay = 20; // milliseconds between steps
   const int steps = duration / stepDelay;
 
   for (int i = 0; i <= steps; i++) {
-  float t = (float)i / steps; // Normalize time [0,1]
-
-  // Choose interpolation profile based on cartesianStep
-  float progress;
-
-  if (cartesianStep > 1) {
-    // Constant velocity profile
-    progress = t;
-  }
-  else {
-    // Accelerating profile:
-    // velocity starts at 0 and reaches max at the end
-    progress = t;
-  }
-
+  float progress = (float)i / steps; // Normalize time [0,1]
+ 
   for (int j = 0; j < NUM_JOINTS; j++)
   { 
-    float interpolatedAngle =
-        servoArray[j].startAngle +
-        progress * (servoArray[j].endAngle - servoArray[j].startAngle);
+    float interpolatedAngle = servoArray[j].startAngle + progress * (servoArray[j].endAngle - servoArray[j].startAngle);
 
-    finalInterpolatedAngle = interpolatedAngle;
-
-    if (j == 1) {
+    float finalInterpolatedAngle = interpolatedAngle;
+    if (j == 1) 
       finalInterpolatedAngle -= 20;
-    }
 
     if(finalInterpolatedAngle > 90)
       finalInterpolatedAngle = 90;
+
     else if(finalInterpolatedAngle < -90)
       finalInterpolatedAngle = -90;
 
@@ -364,8 +309,8 @@ void moveJoint(unsigned long duration, int cartesianStep){
 
   if(haltOperation())
   {
-    for(int i = 0; i < NUM_JOINTS; i++)
-      servoArray[i].startAngle = servoArray[i].currentAngle;
+    for(int k = 0; k < NUM_JOINTS; k++)
+      servoArray[k].startAngle = servoArray[k].currentAngle;
     return;
   }
 }
@@ -491,7 +436,6 @@ void openGripper()
   cubicInterpolateServo(0, -45, gripperDurationMs, 5); 
   pos.gripperOpen = true;
   delay(300);
-  
 }
 
 void closeGripper()
@@ -502,7 +446,6 @@ void closeGripper()
   cubicInterpolateServo(-45, 0, gripperDurationMs, 5);  
   pos.gripperOpen = false;
   delay(300);
-
 }
 
 void updateCommand()
@@ -520,11 +463,9 @@ void updateCommand()
 bool haltOperation()
 {
   updateCommand();
-
-  if (command == "idle,o" || command == "idle,c" || digitalRead(switchPin) == HIGH) {
+  if (command == "idle,o" || command == "idle,c" || digitalRead(switchPin) == HIGH) 
     return true;
-  }
-
+  
   return false;
 }
 
@@ -565,16 +506,6 @@ void getZLimits(float x, float y, float R, float r, float &zMin, float &zMax)
 
 void getYLimits(float x, float y, float z, float R, float r, float &yMin, float &yMax)
 {
-  // Workspace:
-  // (sqrt(x^2 + y^2) - R)^2 + z^2 <= r^2
-  //
-  // x = front/back, y = left/right, z = up/down
-  // x >= 0, z >= 0
-  //
-  // This function returns:
-  // yMin = next reachable boundary in -y direction
-  // yMax = next reachable boundary in +y direction
-
   float s = sqrt(r * r - z * z);
 
   float rhoMin = R - s;
@@ -586,8 +517,7 @@ void getYLimits(float x, float y, float z, float R, float r, float &yMin, float 
   float innerVal = rhoMin * rhoMin - x * x;
 
   // Case 1: no forbidden inner hole for this x,z slice.
-  // Valid y range is continuous:
-  // -yOuter <= y <= +yOuter
+  // Valid y range is continuous: -yOuter <= y <= +yOuter
   if(innerVal <= 0) {
     yMin = -yOuter;
     yMax =  yOuter;
@@ -606,14 +536,14 @@ void getYLimits(float x, float y, float z, float R, float r, float &yMin, float 
     float yOuterPos =  yOuter;
 
     if(y < 0) {
-      // We are on the negative y branch.
+      // Negative y branch.
       // Moving -y goes to outer negative boundary.
       // Moving +y goes to inner negative boundary.
       yMin = yOuterNeg;
       yMax = yInnerNeg;
     }
     else {
-      // We are on the positive y branch.
+      // Positive y branch.
       // Moving -y goes to inner positive boundary.
       // Moving +y goes to outer positive boundary.
       yMin = yInnerPos;
@@ -666,9 +596,3 @@ void createDHMatrix(float phi, float d, float a, float alpha, float T[4][4])
   T[3][3] = 1.0;
 }
 
-
-
-/*
-
-
-*/

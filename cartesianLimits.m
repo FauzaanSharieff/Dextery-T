@@ -66,9 +66,9 @@ text(0, 0, r+3, ' +z/up');
 %  Uncomment this section if you want x-limits.
 %% ============================================================
 
-%{
-givenY = 0;     % cm
-givenZ = 1;     % cm
+%
+givenY = -5;     % cm
+givenZ = 3;     % cm
 
 [xMin, xMax, validX] = getXLimits(givenY, givenZ, R, r);
 
@@ -103,9 +103,9 @@ end
 %  Uncomment this section if you want y-limits.
 %% ============================================================
 
-%
-givenX = 12;  % cm
-givenZ = 3;     % cm
+%{
+givenX = 17;  % cm
+givenZ = 2.4;     % cm
 
 [yMin, yMax, validY] = getYLimits(givenX, givenZ, R, r);
 

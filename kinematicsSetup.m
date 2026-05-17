@@ -23,9 +23,9 @@ l(3) = 12.5;
 l(4) = 0;
 l(5) = 17.5; 
 
-theta(1) = 8.01 * pi / 180;
-theta(2) = 0.7 * pi / 180;
-theta(3) = 0.71 * pi / 180;
+theta(1) = 60 * pi / 180;
+theta(2) = -30 * pi / 180;
+theta(3) = 40 * pi / 180;
 theta(4) = (pi - (theta(2) + theta(3) + pi/2) - pi/2); 
 theta(5) = theta(1);
 
